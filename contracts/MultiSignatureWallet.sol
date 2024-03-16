@@ -16,42 +16,35 @@ contract MultiSignatureWallet {
     }
 
     mapping (bytes32 => Transaction) public transactions;
-    mapping(bytes32 => mapping(address => bool)) public confirmations;
+    mapping (bytes32 => mapping(address => bool)) public confirmations;
 
     mapping (address => bool) public isOwner;
     address[] public owners;
     uint public immutable CONFIRMATIONS_REQUIRED;
-
-
-    modifier validRequirement(uint ownerCount, uint _required) {
-        require(_required <= ownerCount
-            	&& _required != 0
-            	&& ownerCount != 0, "validRequirment: not enough owners or confirmations");
-        _;
-    }
+       
 
     modifier onlyOwner() {
-        require(isOwner[msg.sender], "onlyOwner: not an owner!");
+        require(isOwner[msg.sender], "not an owner!");
         _;
     }
 
     modifier notNull(address _address) {
-        require(_address != address(0));
+        require(_address != address(0), "address can't be 0!");
         _;
     }
 
     modifier notExecuted(bytes32 transactionId) {
-        require(!transactions[transactionId].executed);
+        require(!transactions[transactionId].executed, "transaction alredy executed!");
         _;
     }
 
     modifier transactionExists(bytes32 transactionId) {
-        require(transactions[transactionId].destination != address(0), "confirm: transaction not exist!");
+        require(transactions[transactionId].destination != address(0), "transaction not exist!");
         _;
     }
 
     modifier confirmed(bytes32 transactionId, address owner) {
-        require(confirmations[transactionId][owner]);
+        require(confirmations[transactionId][owner], "transaction not confirmed");
         _;
     }
 
@@ -59,27 +52,29 @@ contract MultiSignatureWallet {
    event AddTransaction(bytes32 transactionId);
    event ExecutionSuccess(bytes32 indexed transactionId);
    event ExecutionFailure(bytes32 indexed transactionId);
+   event Deposit(address indexed sender, uint value);
 
 
 
     /// @dev Contract constructor sets initial owners and required number of confirmations.
     /// @param _owners List of initial owners.
-    /// @param _required Number of required confirmations.
-    constructor(address[] memory _owners, uint _required) 
-	payable 
-	validRequirement(_owners.length, _required) 
+    /// @param _numConfirmationsRequired Number of required confirmations.
+    constructor(address[] memory _owners, uint _numConfirmationsRequired) 
+	payable     	
 
     {
-        CONFIRMATIONS_REQUIRED = _required;
+        CONFIRMATIONS_REQUIRED = _numConfirmationsRequired;
 
-        for (uint i=0; i<_owners.length; i++) {
-            address nextOwner = _owners[i];
+        require(_owners.length > 0, "Owners required");
+        require(_numConfirmationsRequired > 0 && _numConfirmationsRequired <= _owners.length, "Invalid number of confirmations required");
 
-            require(nextOwner != address(0), "Constructor: cant have zero address as owner!");
-            require(!isOwner[nextOwner], "Constructor: duplicate owner!");
+        for (uint i = 0; i < _owners.length; i++) {
+            address owner = _owners[i];
+            require(owner != address(0), "Invalid owner");
+            require(!isOwner[owner], "Duplicate owner");
 
-            isOwner[nextOwner] = true;
-            owners.push(nextOwner);
+            isOwner[owner] = true;
+            owners.push(owner);
         }
         
     }
@@ -90,7 +85,7 @@ contract MultiSignatureWallet {
     /// @param value Transaction ether value.
     /// @param data Transaction data payload.
     /// @return transactionId Returns transaction ID.
-    function addTransaction(address destination, uint value, bytes memory data)
+    function addTransaction(address destination, uint value, bytes memory data, uint timestamp)
         external
         onlyOwner
         notNull(destination)
@@ -101,14 +96,14 @@ contract MultiSignatureWallet {
             destination,            
 	    value,
             data,            
-            block.timestamp
+            timestamp
         ));
 
         transactions[transactionId] = Transaction({
             destination: destination,
             value: value,
             data: data,
-            timestamp: block.timestamp,
+            timestamp: timestamp,
             executed: false,
 	    confirmations: 0
         });
@@ -126,7 +121,7 @@ contract MultiSignatureWallet {
 	onlyOwner
 	transactionExists(transactionId)
     {
-        require(!confirmations[transactionId][msg.sender], "Confirm: already confirmed!");
+        require(!confirmations[transactionId][msg.sender], "confirmTransaction: already confirmed!");
 
         Transaction storage transaction = transactions[transactionId];
 
@@ -140,8 +135,9 @@ contract MultiSignatureWallet {
 	external 
 	onlyOwner 
 	transactionExists(transactionId)
+        confirmed(transactionId, msg.sender)
+        notExecuted(transactionId)
     {
-        require(confirmations[transactionId][msg.sender], "cancelConfirmation: not confirmed!");
 
         Transaction storage transaction = transactions[transactionId];
         transaction.confirmations--;
@@ -171,5 +167,26 @@ contract MultiSignatureWallet {
             }
         }
     }      
+
+    /// @dev Returns the confirmation status of a transaction.
+    /// @param transactionId Transaction ID.
+    /// @return Confirmation status.
+    function isConfirmed(bytes32 transactionId)
+        public
+	transactionExists(transactionId)
+        returns (bool)
+    {
+        uint count = 0;
+        for (uint i=0; i<owners.length; i++) {
+            if (confirmations[transactionId][owners[i]])
+                count += 1;
+            if (count == CONFIRMATIONS_REQUIRED)
+                return true;
+        }
+    }
+
+    receive() external payable {
+        emit Deposit(msg.sender, msg.value);
+    }
 
 }

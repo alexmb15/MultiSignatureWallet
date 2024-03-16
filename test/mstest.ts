@@ -109,7 +109,7 @@ describe("MultiSignatureWallet", function () {
       expect(await multiSig.confirmations(transactionId, owner2.address)).to.be.false;
     });     
 
-    it('should execute a transaction with right owner and emit event', async function () {
+    it("should execute a transaction with right owner and emit event 'ExecutionSuccess'", async function () {
 
       const { multiSig, owner1, owner2, owner3, otherAccount, destination, value, emptyData, timestamp } = await loadFixture(deployMultiSigFixture);
    
@@ -124,6 +124,37 @@ describe("MultiSignatureWallet", function () {
       await multiSig.connect(owner3).confirmTransaction(transactionId);
 
       await expect(multiSig.connect(owner2).executeTransaction(transactionId)).to.emit(multiSig, 'ExecutionSuccess');
+    });
+
+    it("should fail a transaction and emit event 'ExecutionFailure'", async function () {
+
+      const { multiSig, owner1, owner2, owner3, otherAccount, destination, emptyData, timestamp } = await loadFixture(deployMultiSigFixture);
+
+      let value = ethers.parseUnits("123", "ether");
+      await multiSig.addTransaction(destination, value, emptyData, timestamp);
+
+      const transactionId = ethers.solidityPackedKeccak256(
+            ["address", "uint256", "bytes", "uint256"],
+            [destination, value, emptyData, timestamp]
+      );
+
+      await multiSig.connect(owner2).confirmTransaction(transactionId);
+      await multiSig.connect(owner3).confirmTransaction(transactionId);
+
+      await expect(multiSig.connect(owner2).executeTransaction(transactionId)).to.emit(multiSig, 'ExecutionFailure');
+    });
+
+    it("should emit event 'Deposit'", async function () {
+
+      const { multiSig, otherAccount, value } = await loadFixture(deployMultiSigFixture);
+
+      const tx = otherAccount.sendTransaction({
+        to: multiSig.target,
+        value: value
+      });           
+
+     await expect(tx).to.emit(multiSig, 'Deposit');
+
     });
 
     it("should revert with message 'not an owner!' ", async function () {

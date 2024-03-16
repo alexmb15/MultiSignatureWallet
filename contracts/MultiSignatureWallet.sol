@@ -55,7 +55,6 @@ contract MultiSignatureWallet {
    event Deposit(address indexed sender, uint value);
 
 
-
     /// @dev Contract constructor sets initial owners and required number of confirmations.
     /// @param _owners List of initial owners.
     /// @param _numConfirmationsRequired Number of required confirmations.
@@ -152,13 +151,14 @@ contract MultiSignatureWallet {
 	transactionExists(transactionId)
         confirmed(transactionId, msg.sender)
         notExecuted(transactionId)
+        returns(bool success, bytes memory returnData)
     {
 
         Transaction storage transaction = transactions[transactionId];
 
         if (transaction.confirmations >= CONFIRMATIONS_REQUIRED) {
             transaction.executed = true;
-            (bool success, ) = transaction.destination.call{value: transaction.value}(transaction.data);
+            (success, returnData) = transaction.destination.call{value: transaction.value}(transaction.data);
             if (success)
                emit ExecutionSuccess(transactionId);
             else {
@@ -167,23 +167,6 @@ contract MultiSignatureWallet {
             }
         }
     }      
-
-    /// @dev Returns the confirmation status of a transaction.
-    /// @param transactionId Transaction ID.
-    /// @return Confirmation status.
-    function isConfirmed(bytes32 transactionId)
-        public
-	transactionExists(transactionId)
-        returns (bool)
-    {
-        uint count = 0;
-        for (uint i=0; i<owners.length; i++) {
-            if (confirmations[transactionId][owners[i]])
-                count += 1;
-            if (count == CONFIRMATIONS_REQUIRED)
-                return true;
-        }
-    }
 
     receive() external payable {
         emit Deposit(msg.sender, msg.value);

@@ -171,7 +171,26 @@ describe("MultiSignatureWallet", function () {
 
       const { multiSig, owner1, owner2, owner3, otherAccount, destination, value, emptyData, timestamp } = await loadFixture(deployMultiSigFixture);
 
+      const transactionId = ethers.solidityPackedKeccak256(
+            ["address", "uint256", "bytes", "uint256"],
+            [destination, value, emptyData, timestamp]
+      );
+
+      //add transaction (not an owner)
       await expect(multiSig.connect(otherAccount).addTransaction(destination, value,  emptyData, timestamp)).to.be.revertedWith("not an owner!");
+
+      //add transaction (owner)
+      await multiSig.connect(owner2).addTransaction(destination, value,  emptyData, timestamp);
+
+      //confirm transaction (not an owner)
+      await expect(multiSig.connect(otherAccount).confirmTransaction(transactionId)).to.be.revertedWith("not an owner!");
+
+      //confirm transaction (owners)
+      await multiSig.connect(owner2).confirmTransaction(transactionId);
+      await multiSig.connect(owner3).confirmTransaction(transactionId);
+
+      //execute transaction (not an owner)
+      await expect(multiSig.connect(otherAccount).executeTransaction(transactionId)).to.be.revertedWith("not an owner!");      
 
     });   
      

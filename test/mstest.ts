@@ -157,6 +157,16 @@ describe("MultiSignatureWallet", function () {
 
     });
 
+    it("should revert with message 'transaction alredy exist!' ", async function () {
+
+      const { multiSig, owner1, owner2, owner3, otherAccount, destination, value, emptyData, timestamp } = await loadFixture(deployMultiSigFixture);
+
+      await multiSig.connect(owner2).addTransaction(destination, value,  emptyData, timestamp);
+
+      await expect(multiSig.connect(owner3).addTransaction(destination, value,  emptyData, timestamp)).to.be.revertedWith("transaction alredy exist!");
+
+    });   
+
     it("should revert with message 'not an owner!' ", async function () {
 
       const { multiSig, owner1, owner2, owner3, otherAccount, destination, value, emptyData, timestamp } = await loadFixture(deployMultiSigFixture);

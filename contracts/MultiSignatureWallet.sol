@@ -98,6 +98,8 @@ contract MultiSignatureWallet {
             timestamp
         ));
 
+        require(transactions[transactionId].destination == address(0), "transaction alredy exist!");
+
         transactions[transactionId] = Transaction({
             destination: destination,
             value: value,
